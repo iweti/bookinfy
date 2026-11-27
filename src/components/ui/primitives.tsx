@@ -166,11 +166,7 @@ export function EmptyState({
 }
 export function PageSkeleton() {
   return (
-    <div
-      className="page-skeleton"
-      role="status"
-      aria-label="Carregando demonstração"
-    >
+    <div className="page-skeleton" role="status" aria-label="Carregando">
       <div className="skeleton skeleton-title" />
       <div className="grid-three">
         {[1, 2, 3].map((id) => (

@@ -1,0 +1,19 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: bookinfy
+      POSTGRES_USER: bookinfy
+      POSTGRES_PASSWORD: ${BOOKINFY_POSTGRES_PASSWORD:?defina BOOKINFY_POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - bookinfy-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bookinfy -d bookinfy"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  bookinfy-db:

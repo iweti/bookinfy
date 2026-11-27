@@ -1,3 +1,4 @@
+import { liveMode } from "@/lib/bookinfy/mode";
 import {
   ArrowDown,
   ArrowUpRight,
@@ -159,8 +160,8 @@ export function Hero() {
             para o que importa: <strong>cuidar de quem chega.</strong>
           </p>
           <div className="hero-actions">
-            <ButtonLink href="/cadastro" arrow>
-              Conhecer o Bookinfy
+            <ButtonLink href={liveMode ? "/login" : "/cadastro"} arrow>
+              {liveMode ? "Acessar painel" : "Conhecer o Bookinfy"}
             </ButtonLink>
             <ButtonLink href="/agendar" variant="secondary">
               Ver um agendamento <ArrowUpRight size={17} />
@@ -299,7 +300,12 @@ export function Features() {
                 <h3>{title}</h3>
                 <p>{description}</p>
                 <Link href={index === 0 ? "/agendar" : "/login"}>
-                  Explorar na demonstração <ArrowUpRight size={17} />
+                  {liveMode
+                    ? index === 0
+                      ? "Abrir agendamento"
+                      : "Acessar painel"
+                    : "Explorar na demonstração"}{" "}
+                  <ArrowUpRight size={17} />
                 </Link>
               </article>
             ),
@@ -330,10 +336,12 @@ export function Workflow() {
           <ButtonLink href="/agendar" variant="secondary" arrow>
             Experimentar o agendamento
           </ButtonLink>
-          <div className="workflow-note">
-            <ShieldCheck size={17} /> Você está explorando uma demonstração
-            visual.
-          </div>
+          {liveMode ? null : (
+            <div className="workflow-note">
+              <ShieldCheck size={17} /> Você está explorando uma demonstração
+              visual.
+            </div>
+          )}
         </div>
         <div className="workflow-steps">
           {[
@@ -467,7 +475,11 @@ export function Plans() {
             <br />
             <em>de uma rotina mais leve.</em>
           </h2>
-          <p>Explore os recursos do Bookinfy em uma demonstração navegável.</p>
+          <p>
+            {liveMode
+              ? "O agendamento online e a agenda do dono já estão disponíveis."
+              : "Explore os recursos do Bookinfy em uma demonstração navegável."}
+          </p>
         </div>
         <div className="plan-panel">
           <div className="plan-intro">
@@ -482,8 +494,8 @@ export function Plans() {
             <p>
               Gestão do cuidado, do primeiro agendamento à visão do negócio.
             </p>
-            <ButtonLink href="/cadastro" arrow>
-              Explorar a demonstração
+            <ButtonLink href={liveMode ? "/login" : "/cadastro"} arrow>
+              {liveMode ? "Acessar painel" : "Explorar a demonstração"}
             </ButtonLink>
             <small>
               Apresentação de recursos. Sem contratação nesta etapa.
@@ -528,15 +540,19 @@ export function FAQ() {
     ],
     [
       "Posso experimentar o fluxo de agendamento?",
-      "Sim. A demonstração permite escolher unidade, serviço, profissional, data e horário. Use dados fictícios: os agendamentos são demonstrativos e ficam apenas neste navegador.",
+      liveMode
+        ? "Sim. Escolha um estabelecimento, serviço, profissional e horário para reservar."
+        : "Sim. A demonstração permite escolher unidade, serviço, profissional, data e horário. Use dados fictícios: os agendamentos são demonstrativos e ficam apenas neste navegador.",
     ],
     [
       "Minha equipe terá uma visão própria?",
-      "Sim. Na tela de acesso, escolha o perfil de funcionário para conhecer a agenda individual e os status dos atendimentos.",
+      liveMode
+        ? "A agenda está disponível para o dono. A visão individual dos funcionários está prevista para a etapa de gestão."
+        : "Sim. Na tela de acesso, escolha o perfil de funcionário para conhecer a agenda individual e os status dos atendimentos.",
     ],
     [
       "Os lembretes por WhatsApp já estão disponíveis?",
-      "Ainda não. O envio de mensagens, a recuperação automática de horários e as demais automações estão previstos para a Etapa 3.",
+      "Ainda não. O envio de mensagens, a recuperação automática de horários e as demais automações estão previstos para uma etapa futura.",
     ],
     [
       "Como conhecer os planos e os valores?",
@@ -588,8 +604,12 @@ export function FinalCTA() {
           </h2>
         </div>
         <div>
-          <ButtonLink href="/cadastro" className="button-white" arrow>
-            Conhecer o Bookinfy
+          <ButtonLink
+            href={liveMode ? "/login" : "/cadastro"}
+            className="button-white"
+            arrow
+          >
+            {liveMode ? "Acessar painel" : "Conhecer o Bookinfy"}
           </ButtonLink>
           <Link href="/agendar">
             Ou veja como seu cliente agenda <ChevronRight size={16} />

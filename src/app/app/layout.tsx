@@ -1,3 +1,5 @@
+import { liveMode } from "@/lib/bookinfy/mode";
+import { OwnerPanel } from "@/features/owner/owner-panel";
 import { AppShell } from "@/components/layout/app-shell";
 export const metadata = { title: "Painel de gestão" };
 export default function PanelLayout({
@@ -5,5 +7,9 @@ export default function PanelLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <AppShell>{children}</AppShell>;
+  return liveMode ? (
+    <OwnerPanel>{children}</OwnerPanel>
+  ) : (
+    <AppShell>{children}</AppShell>
+  );
 }
