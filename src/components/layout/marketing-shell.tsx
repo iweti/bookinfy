@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { ArrowUpRight, Menu, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Brand, Credit } from "./brand";
+import { liveMode } from "@/lib/bookinfy/mode";
 import { ButtonLink } from "@/components/ui/primitives";
 
 const links = [
@@ -46,8 +47,11 @@ export function MarketingHeader() {
           <Link href="/login" className="login-link">
             Entrar <ArrowUpRight size={15} />
           </Link>
-          <ButtonLink href="/cadastro" className="header-cta">
-            Conhecer o Bookinfy
+          <ButtonLink
+            href={liveMode ? "/login" : "/cadastro"}
+            className="header-cta"
+          >
+            {liveMode ? "Acessar painel" : "Conhecer o Bookinfy"}
           </ButtonLink>
           <button
             className="icon-button mobile-menu-toggle"
@@ -75,8 +79,11 @@ export function MarketingHeader() {
               {link.label}
             </Link>
           ))}
-          <Link href="/cadastro" onClick={() => setOpen(false)}>
-            Conhecer a demonstração
+          <Link
+            href={liveMode ? "/login" : "/cadastro"}
+            onClick={() => setOpen(false)}
+          >
+            {liveMode ? "Acessar painel" : "Conhecer a demonstração"}
           </Link>
         </nav>
       ) : null}
@@ -95,7 +102,9 @@ export function MarketingFooter() {
             <br />
             Mais espaço para crescer.
           </p>
-          <span className="footer-demo">MVP visual · Etapa 1</span>
+          {liveMode ? null : (
+            <span className="footer-demo">MVP visual · Etapa 1</span>
+          )}
         </div>
         <div>
           <h3>Explore</h3>
@@ -107,7 +116,9 @@ export function MarketingFooter() {
           <h3>Experimente</h3>
           <Link href="/agendar">Agendamento online</Link>
           <Link href="/login">Painel de gestão</Link>
-          <Link href="/cadastro">Criar conta demonstrativa</Link>
+          {liveMode ? null : (
+            <Link href="/cadastro">Criar conta demonstrativa</Link>
+          )}
         </div>
         <div className="footer-note">
           <span className="small-dot" /> Feito para sua próxima fase.
@@ -116,7 +127,7 @@ export function MarketingFooter() {
       </div>
       <div className="container footer-bottom">
         <Credit />
-        <span>Conteúdo e dados de demonstração.</span>
+        {liveMode ? null : <span>Conteúdo e dados de demonstração.</span>}
       </div>
     </footer>
   );

@@ -1,22 +1,10 @@
 # Bookinfy — instruções para agentes
 
-A documentação oficial existe **somente no repositório irmão `../bookinfy-obsidian`**. Não crie `docs/`, cópias de especificações ou outros documentos de projeto neste repositório. Mantenha o `README.md` curto.
+A documentação oficial está no [vault unificado da IWETI](https://github.com/iweti/iweti-obsidian), na pasta `bookinfy/`. O índice do projeto é `bookinfy/bookinfy.md`. Mantenha o README curto e coloque as especificações e registros de entrega no vault.
 
-Antes de alterar o projeto:
+Antes de alterar o projeto, abra o índice do Bookinfy, as orientações do vault e as notas ligadas ao módulo afetado. Se as notas estiverem indisponíveis, procure o repositório `iweti/iweti-obsidian` e peça acesso se necessário. Alinhe decisões de produto que estiverem em aberto.
 
-1. Leia `../bookinfy-obsidian/Bookinfy/brain/bookinfy-brain.md` e `../bookinfy-obsidian/Bookinfy/Operacoes/Fluxo do agente.md`.
-2. Leia as notas de arquitetura, regras, decisões e módulo afetado indicadas no contexto.
-3. Se o vault não estiver disponível, procure o repositório `bookinfy-obsidian` entre as pastas irmãs e pergunte pelo caminho se não o encontrar. Não invente requisitos.
-4. Pergunte ao usuário sobre decisões de produto ausentes. Distinga dados fictícios de regras aprovadas. Go, autenticação e automações reais pertencem a etapas futuras.
-
-Ao concluir cada alteração:
-
-1. Atualize as notas afetadas no vault e a data `atualizado`.
-2. Registre a mudança brevemente em `Bookinfy/brain/sessions` e atualize o contexto e as notas afetadas. Explique escolhas relevantes na própria nota do assunto, sem exigir ADR para cada ajuste.
-3. Execute as verificações do frontend adequadas à mudança. Confira links e caminhos citados nas notas e registre resultados reais em `Bookinfy/Technical Design/Validacao e evidencias.md`. O vault não exige scripts ou testes documentais.
-4. Confira que nenhuma documentação completa foi adicionada ao site. O código e o vault devem descrever a mesma versão.
-
-Leia os guias locais do Next.js para APIs tocadas, conforme a instrução mantida abaixo. As regras detalhadas do projeto e o histórico ficam no vault.
+Ao concluir uma mudança, execute as verificações relevantes e atualize as notas afetadas, a data de revisão e o registro de validação no vault. Descreva o que foi executado e as pendências concretas. Leia os guias locais do Next.js para as APIs tocadas.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

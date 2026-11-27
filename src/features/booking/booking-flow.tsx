@@ -17,7 +17,7 @@ import {
   User,
   Users,
 } from "lucide-react";
-import { Suspense, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Brand, Credit } from "@/components/layout/brand";
 import {
@@ -35,6 +35,23 @@ import { useDemo } from "@/lib/data/use-demo";
 import { repository } from "@/lib/data/mock-repository";
 import { currency, dateLabel, isISODate } from "@/lib/format";
 import { availableSlots } from "@/lib/scheduling";
+import {
+  apiMessage,
+  businessPath,
+  useBookinfyRequest,
+} from "@/lib/bookinfy/api-client";
+import { liveMode } from "@/lib/bookinfy/mode";
+import type { Appointment, BookingDraft } from "@/types/domain";
+import {
+  createLiveBooking,
+  useLiveCatalog,
+  useLiveConfirmation,
+} from "./booking-source";
+import type {
+  BookingCatalog,
+  BookingConfirmation,
+  SubmitBooking,
+} from "./booking-source";
 
 export type BookingStep =
   | "unidade"
@@ -56,8 +73,24 @@ const steps: { id: BookingStep; label: string; path: string }[] = [
   { id: "confirmacao", label: "Confirmação", path: "/agendar/confirmacao" },
 ];
 
-function BookingFlow({ step }: { step: BookingStep }) {
-  const data = useDemo();
+function BookingFlow({
+  step,
+  data,
+  lastBooking,
+  submit,
+  demoAppointments,
+  catalogError,
+  retryCatalog,
+}: {
+  step: BookingStep;
+  data: BookingCatalog | null;
+  lastBooking: BookingConfirmation | null;
+  submit: SubmitBooking;
+  demoAppointments?: Appointment[];
+  catalogError?: string;
+  retryCatalog?: () => void;
+}) {
+  const demo = !liveMode;
   const query = useSearchParams();
   const router = useRouter();
   const queryDate = isISODate(query.get("data")) ? query.get("data")! : "";
@@ -84,9 +117,7 @@ function BookingFlow({ step }: { step: BookingStep }) {
       item.active,
   );
   const index = steps.findIndex((item) => item.id === step);
-  const lastBooking = data?.appointments.find(
-    (item) => item.id === data.lastBookingId,
-  );
+  const lastRequest = useRef<{ draft: string; id: string } | null>(null);
 
   function go(
     path: string,
@@ -106,7 +137,7 @@ function BookingFlow({ step }: { step: BookingStep }) {
     setBusy(true);
     setError("");
     try {
-      const result = await repository.createBooking({
+      const draft: BookingDraft = {
         tenantId: tenant.id,
         serviceId: service.id,
         professionalId: professional.id,
@@ -117,27 +148,33 @@ function BookingFlow({ step }: { step: BookingStep }) {
           phone: String(fields.get("phone")),
           email: String(fields.get("email") ?? ""),
         },
-      });
+      };
+      const serialized = JSON.stringify(draft);
+      if (!lastRequest.current || lastRequest.current.draft !== serialized) {
+        lastRequest.current = {
+          draft: serialized,
+          id: demo ? "" : crypto.randomUUID(),
+        };
+      }
+      const result = await submit(draft, lastRequest.current.id);
       if (result.error) {
         setError(result.error);
         return;
       }
-      router.push("/agendar/confirmacao");
-    } catch {
-      setError("Não foi possível confirmar agora. Tente novamente.");
+      router.push(
+        result.id
+          ? `/agendar/confirmacao?reserva=${result.id}`
+          : "/agendar/confirmacao",
+      );
+    } catch (err) {
+      setError(apiMessage(err));
     } finally {
       setBusy(false);
     }
   }
 
   function downloadCalendar() {
-    if (!data || !lastBooking) return;
-    const selectedService = data.services.find(
-      (item) => item.id === lastBooking.serviceId,
-    );
-    const selectedTenant = data.tenants.find(
-      (item) => item.id === lastBooking.tenantId,
-    );
+    if (!lastBooking) return;
     const start = new Date(`${lastBooking.date}T${lastBooking.time}:00-03:00`);
     const end = new Date(start.getTime() + lastBooking.duration * 60000);
     const stamp = (value: Date) =>
@@ -148,21 +185,27 @@ function BookingFlow({ step }: { step: BookingStep }) {
     const escape = (value: string) =>
       value
         .replace(/\\/g, "\\\\")
-        .replace(/\n/g, "\\n")
+        .replace(/\r\n?|\n/g, "\\n")
         .replace(/,/g, "\\,")
         .replace(/;/g, "\\;");
     const ics = [
       "BEGIN:VCALENDAR",
       "VERSION:2.0",
-      "PRODID:-//Bookinfy//Demo//PT-BR",
+      demo
+        ? "PRODID:-//Bookinfy//Demo//PT-BR"
+        : "PRODID:-//Bookinfy//Agendamento//PT-BR",
       "BEGIN:VEVENT",
-      `UID:${lastBooking.id}@bookinfy.demo`,
+      `UID:${lastBooking.id}@bookinfy`,
       `DTSTAMP:${stamp(new Date())}`,
       `DTSTART:${stamp(start)}`,
       `DTEND:${stamp(end)}`,
-      `SUMMARY:${escape(`${selectedService?.name} — ${selectedTenant?.name} (demonstração)`)}`,
-      `DESCRIPTION:${escape("Agendamento demonstrativo. Não representa uma reserva real.")}`,
-      `LOCATION:${escape(selectedTenant?.address ?? "")}`,
+      `SUMMARY:${escape(`${lastBooking.service} — ${lastBooking.business}${demo ? " (demonstração)" : ""}`)}`,
+      ...(demo
+        ? [
+            `DESCRIPTION:${escape("Agendamento demonstrativo. Não representa uma reserva real.")}`,
+          ]
+        : []),
+      `LOCATION:${escape(lastBooking.address)}`,
       "END:VEVENT",
       "END:VCALENDAR",
       "",
@@ -172,7 +215,9 @@ function BookingFlow({ step }: { step: BookingStep }) {
     );
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = "bookinfy-demonstracao.ics";
+    anchor.download = demo
+      ? "bookinfy-demonstracao.ics"
+      : "bookinfy-reserva.ics";
     anchor.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
@@ -210,16 +255,29 @@ function BookingFlow({ step }: { step: BookingStep }) {
       (index >= 2 && !service) ||
       (index >= 3 && !professional) ||
       (index >= 4 && (!queryDate || !queryTime)));
-  const slots =
+  const selection =
     tenant && service && professional && date
-      ? availableSlots(
-          tenant,
-          service,
-          professional.id,
+      ? { tenant, service, professional }
+      : null;
+  const remoteSlots = useBookinfyRequest<string[]>(
+    !demo && step === "data-horario" && selection
+      ? `${businessPath(selection.tenant.id)}/slots?${new URLSearchParams({
+          service: selection.service.id,
+          professional: selection.professional.id,
           date,
-          data?.appointments ?? [],
+        })}`
+      : null,
+  );
+  const slots =
+    demo && selection
+      ? availableSlots(
+          selection.tenant,
+          selection.service,
+          selection.professional.id,
+          date,
+          demoAppointments ?? [],
         )
-      : [];
+      : (remoteSlots.data ?? []);
 
   return (
     <div className="booking-page">
@@ -229,9 +287,12 @@ function BookingFlow({ step }: { step: BookingStep }) {
           <ArrowLeft size={15} /> Voltar ao site
         </Link>
       </header>
-      <div className="demo-ribbon">
-        <span className="small-dot" /> Demonstração visual · use dados fictícios
-      </div>
+      {demo ? (
+        <div className="demo-ribbon">
+          <span className="small-dot" /> Demonstração visual · use dados
+          fictícios
+        </div>
+      ) : null}
       <main id="main" className="container booking-main">
         <nav className="booking-steps" aria-label="Etapas do agendamento">
           <ol>
@@ -248,8 +309,19 @@ function BookingFlow({ step }: { step: BookingStep }) {
             ))}
           </ol>
         </nav>
-        {!data ? (
+        {catalogError ? (
+          <EmptyState
+            title="Não foi possível carregar o agendamento"
+            description={catalogError}
+            action={<Button onClick={retryCatalog}>Tentar novamente</Button>}
+          />
+        ) : !data ? (
           <PageSkeleton />
+        ) : step === "unidade" && !data.tenants.length ? (
+          <EmptyState
+            title="Nenhum estabelecimento disponível"
+            description="Volte mais tarde para consultar novamente."
+          />
         ) : incomplete ? (
           <EmptyState
             title="Vamos começar do início?"
@@ -262,24 +334,16 @@ function BookingFlow({ step }: { step: BookingStep }) {
               <span className="confirmation-icon">
                 <CheckCheck size={38} />
               </span>
-              <Badge tone="green">AGENDAMENTO DEMONSTRATIVO CRIADO</Badge>
+              <Badge tone="green">
+                {demo
+                  ? "AGENDAMENTO DEMONSTRATIVO CRIADO"
+                  : "AGENDAMENTO CONFIRMADO"}
+              </Badge>
               <h1>{titles.confirmacao[0]}</h1>
               <p>O próximo encontro com o seu cuidado já tem hora.</p>
               <div className="confirmation-summary">
-                <h2>
-                  {
-                    data.tenants.find(
-                      (item) => item.id === lastBooking.tenantId,
-                    )?.name
-                  }
-                </h2>
-                <strong>
-                  {
-                    data.services.find(
-                      (item) => item.id === lastBooking.serviceId,
-                    )?.name
-                  }
-                </strong>
+                <h2>{lastBooking.business}</h2>
+                <strong>{lastBooking.service}</strong>
                 <div>
                   <span>
                     <CalendarDays size={18} />
@@ -295,11 +359,7 @@ function BookingFlow({ step }: { step: BookingStep }) {
                   </span>
                   <span>
                     <User size={18} />
-                    {
-                      data.professionals.find(
-                        (item) => item.id === lastBooking.professionalId,
-                      )?.name
-                    }
+                    {lastBooking.professional}
                   </span>
                 </div>
                 <div className="summary-total">
@@ -307,17 +367,21 @@ function BookingFlow({ step }: { step: BookingStep }) {
                   <strong>{currency(lastBooking.price)}</strong>
                 </div>
               </div>
-              <p className="confirmation-disclaimer">
-                Esta é uma reserva de demonstração, sem atendimento real ou
-                envio de mensagens. Você pode vê-la no painel do dono.
-              </p>
+              {demo ? (
+                <p className="confirmation-disclaimer">
+                  Esta é uma reserva de demonstração, sem atendimento real ou
+                  envio de mensagens. Você pode vê-la no painel do dono.
+                </p>
+              ) : null}
               <div className="confirmation-actions">
                 <Button onClick={downloadCalendar} variant="secondary">
                   <Download size={17} /> Adicionar ao calendário
                 </Button>
-                <ButtonLink href="/login">
-                  Ver no painel <ArrowRight size={17} />
-                </ButtonLink>
+                {demo ? (
+                  <ButtonLink href="/login">
+                    Ver no painel <ArrowRight size={17} />
+                  </ButtonLink>
+                ) : null}
               </div>
               <Link href="/agendar" className="text-link">
                 Fazer outro agendamento
@@ -513,6 +577,18 @@ function BookingFlow({ step }: { step: BookingStep }) {
                               para encontrar seu horário.
                             </p>
                           </div>
+                        ) : remoteSlots.loading ? (
+                          <p role="status">Consultando horários…</p>
+                        ) : remoteSlots.error ? (
+                          <EmptyState
+                            title="Não foi possível consultar os horários"
+                            description={remoteSlots.error.message}
+                            action={
+                              <Button onClick={remoteSlots.retry}>
+                                Tentar novamente
+                              </Button>
+                            }
+                          />
                         ) : slots.length ? (
                           <>
                             <p className="time-date-label">
@@ -580,7 +656,11 @@ function BookingFlow({ step }: { step: BookingStep }) {
                         pattern="[\d\s()+-]{10,17}"
                         maxLength={17}
                         autoComplete="tel"
-                        hint="Use um número fictício na demonstração."
+                        hint={
+                          demo
+                            ? "Use um número fictício na demonstração."
+                            : undefined
+                        }
                       />
                       <Field
                         label="E-mail (opcional)"
@@ -591,11 +671,13 @@ function BookingFlow({ step }: { step: BookingStep }) {
                         autoComplete="email"
                       />
                     </div>
-                    <label className="checkbox-label">
-                      <input type="checkbox" required /> Entendo que este é um
-                      agendamento de demonstração e estou usando dados
-                      fictícios.
-                    </label>
+                    {demo ? (
+                      <label className="checkbox-label">
+                        <input type="checkbox" required /> Entendo que este é um
+                        agendamento de demonstração e estou usando dados
+                        fictícios.
+                      </label>
+                    ) : null}
                     <InlineError>{error}</InlineError>
                     <div className="booking-next">
                       <p>
@@ -697,9 +779,11 @@ function BookingFlow({ step }: { step: BookingStep }) {
         )}
         <div className="booking-footer">
           <Credit />
-          <span>
-            <ShieldCheck size={13} /> Experiência demonstrativa
-          </span>
+          {demo ? (
+            <span>
+              <ShieldCheck size={13} /> Experiência demonstrativa
+            </span>
+          ) : null}
         </div>
       </main>
     </div>
@@ -714,10 +798,81 @@ function HeartNote() {
   );
 }
 
+function DemoBookingFlow({ step }: { step: BookingStep }) {
+  const data = useDemo();
+  const appointment = data?.appointments.find(
+    (item) => item.id === data.lastBookingId,
+  );
+  const tenant = data?.tenants.find(
+    (item) => item.id === appointment?.tenantId,
+  );
+  const confirmation = appointment
+    ? {
+        id: appointment.id,
+        business: tenant?.name ?? "",
+        address: tenant?.address ?? "",
+        service:
+          data?.services.find((item) => item.id === appointment.serviceId)
+            ?.name ?? "",
+        professional:
+          data?.professionals.find(
+            (item) => item.id === appointment.professionalId,
+          )?.name ?? "",
+        date: appointment.date,
+        time: appointment.time,
+        duration: appointment.duration,
+        price: appointment.price,
+      }
+    : null;
+
+  return (
+    <BookingFlow
+      step={step}
+      data={data}
+      lastBooking={confirmation}
+      submit={(draft) => repository.createBooking(draft)}
+      demoAppointments={data?.appointments}
+    />
+  );
+}
+
+function LiveBookingFlow({ step }: { step: BookingStep }) {
+  const query = useSearchParams();
+  const { catalog, error, retry } = useLiveCatalog({
+    list: step === "unidade",
+    confirmation: step === "confirmacao",
+  });
+  const confirmation = useLiveConfirmation(
+    step === "confirmacao" ? query.get("reserva") : null,
+  );
+
+  return (
+    <BookingFlow
+      step={step}
+      data={catalog}
+      lastBooking={confirmation}
+      catalogError={error?.message}
+      retryCatalog={retry}
+      submit={(draft, requestId) =>
+        createLiveBooking(
+          draft,
+          requestId,
+          catalog?.tenants.find((item) => item.id === draft.tenantId)
+            ?.address ?? "",
+        )
+      }
+    />
+  );
+}
+
 export function BookingRoute({ step }: { step: BookingStep }) {
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <BookingFlow step={step} />
+      {liveMode ? (
+        <LiveBookingFlow step={step} />
+      ) : (
+        <DemoBookingFlow step={step} />
+      )}
     </Suspense>
   );
 }
